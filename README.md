@@ -25,16 +25,34 @@ Top-level keys in `fcm_project.json`:
 Rules: concept IDs are integers everywhere; JSON keys use their string form; all timeseries arrays share length; `results.adjacency_matrix` order must match `concept_ids` so comparison scripts align correctly.
 
 ## Installation
-Conda (recommended):
+
+### From PyPI (recommended)
+```bash
+pip install causal-mm
+```
+
+With optional econml backends:
+```bash
+pip install causal-mm[econml]
+```
+
+### From GitHub
+```bash
+pip install git+https://github.com/skp703/causal-mm.git
+```
+
+### From source (development)
+```bash
+git clone https://github.com/skp703/causal-mm.git
+cd causal-mm
+pip install -e .
+```
+
+### Using conda
 ```bash
 conda env create -f environment.yml
 conda activate causal-mm
-# or: conda env create -f environment.yml --prefix ./.conda && conda activate ./.conda
-```
-Pip:
-```bash
 pip install -e .
-# or: pip install -r requirements.txt && pip install -e .
 ```
 
 ## CLI
