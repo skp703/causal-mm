@@ -1,0 +1,51 @@
+[project]
+name = "causal-mm"
+version = "0.1.0"
+description = "Time-series Double Machine Learning for Fuzzy Cognitive Maps"
+readme = "README.md"
+requires-python = ">=3.9,<3.13"
+license = {text = "MIT"}
+authors = [
+  {name = "Saurav Kumar"},
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering",
+]
+keywords = ["causal-inference", "fuzzy-cognitive-maps", "double-machine-learning", "time-series"]
+dependencies = [
+  "numpy>=1.24",
+  "pandas>=2.0",
+  "scikit-learn>=1.3",
+  "joblib>=1.3",
+  "statsmodels>=0.14",
+]
+
+[project.optional-dependencies]
+econml = ["econml>=0.15", "lightgbm>=4.0"]
+dev = ["pytest>=7.0", "build", "twine"]
+
+[project.urls]
+Homepage = "https://waterdmd.info/causal-mm"
+Repository = "https://github.com/skp703/causal-mm"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+exclude = ["tests*"]
+
+[project.scripts]
+causal-mm-run = "causal_mm.pipeline:main"

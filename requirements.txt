@@ -1,0 +1,10 @@
+# Runtime dependencies for causal_mm
+econml>=0.15  # optional, needed for --use-econml and econml-estimators
+lightgbm>=4.0  # optional, useful if econml estimators require it
+numpy
+pandas
+scikit-learn
+joblib
+statsmodels
+python-dotenv
+pytest>=7.0

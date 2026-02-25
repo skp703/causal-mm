@@ -1,0 +1,15 @@
+include LICENSE
+include README.md
+include requirements.txt
+include environment.yml
+
+recursive-include src/causal_mm *.py
+recursive-include examples *.py *.json
+
+prune data
+prune temp
+prune results
+prune specs
+prune docs
+prune scripts
+prune .conda
