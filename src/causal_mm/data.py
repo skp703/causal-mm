@@ -109,6 +109,70 @@ def standardize_timeseries(ts: TimeSeriesData) -> TimeSeriesData:
     return TimeSeriesData(index=ts.index.copy(), data=data)
 
 
+def detrend_timeseries(
+    ts: TimeSeriesData,
+    method: str = "linear",
+    columns: List[str] | None = None,
+) -> TimeSeriesData:
+    """
+    Remove deterministic trends from concept time series.
+
+    Parameters
+    ----------
+    ts : TimeSeriesData
+        Input time series.
+    method : str
+        Detrending method:
+        - "linear": subtract OLS-fitted linear trend from each column.
+        - "first_diff": replace each column with first differences (loses one obs).
+    columns : list[str] or None
+        If provided, only detrend these columns; others are left unchanged.
+        If None, detrend all columns.
+
+    Returns a new TimeSeriesData; the original is not modified.
+    """
+
+    if method not in ("linear", "first_diff"):
+        raise ValueError(f"Unknown detrend method '{method}'; use 'linear' or 'first_diff'")
+
+    data = ts.data.copy()
+    target_cols = columns if columns is not None else list(data.columns)
+
+    if method == "linear":
+        # Use integer time index as regressor
+        t = np.arange(len(data), dtype=float)
+        for col in target_cols:
+            if col not in data.columns:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "Detrend: column '%s' not found in data, skipping", col
+                )
+                continue
+            y = data[col].values.astype(float)
+            mask = ~np.isnan(y)
+            if mask.sum() < 2:
+                continue
+            # Fit OLS: y = a + b*t
+            t_valid = t[mask]
+            y_valid = y[mask]
+            b = np.cov(t_valid, y_valid, ddof=0)[0, 1] / np.var(t_valid, ddof=0) if np.var(t_valid, ddof=0) > 0 else 0.0
+            a = np.mean(y_valid) - b * np.mean(t_valid)
+            data[col] = y - (a + b * t)
+
+        return TimeSeriesData(index=ts.index.copy(), data=data)
+
+    else:  # first_diff
+        diffed = data.copy()
+        for col in target_cols:
+            if col not in data.columns:
+                continue
+            diffed[col] = data[col].diff()
+        # Drop the first row (NaN from differencing)
+        diffed = diffed.iloc[1:].reset_index(drop=True)
+        new_index = ts.index[1:] if hasattr(ts.index, '__getitem__') else np.asarray(ts.index)[1:]
+        return TimeSeriesData(index=np.asarray(new_index), data=diffed)
+
+
 def align_fcm_and_timeseries(fcm: "FCMGraph", ts: TimeSeriesData) -> TimeSeriesData:
     """
     Ensure that FCM concept IDs are present as columns in ts.data.

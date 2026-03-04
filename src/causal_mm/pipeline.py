@@ -10,13 +10,43 @@ from typing import Optional, Dict, Any
 
 from .bootstrap import bootstrap_all_edges
 from .config import BootstrapConfig, DMLConfig, LagConfig, MLModelConfig
-from .data import standardize_timeseries
+from .data import detrend_timeseries, standardize_timeseries
 from .dml import estimate_all_edges_dml
 from .io import load_project, save_project
 from .fcm import FCMGraph
 from .metrics import graph_complexity_metrics, concept_centrality_metrics
 
 logger = logging.getLogger(__name__)
+
+
+def _get_detrend_columns(
+    fcm: FCMGraph, global_method: str, ts: "TimeSeriesData"
+) -> "list[str] | None":
+    """
+    Determine which columns to detrend based on per-concept metadata.
+
+    Each concept can specify ``"detrend": "linear"`` / ``"first_diff"`` /
+    ``"none"`` in its ``metadata`` dict.  If *any* concept has a per-concept
+    override, we build an explicit column list (only those whose effective
+    method matches ``global_method``).  If *no* concept has an override, we
+    return None (meaning detrend all columns).
+    """
+
+    has_overrides = any(
+        c.metadata and "detrend" in c.metadata for c in fcm.concepts
+    )
+    if not has_overrides:
+        return None  # detrend everything
+
+    cols = []
+    for c in fcm.concepts:
+        cid = str(c.id)
+        if cid not in ts.data.columns:
+            continue
+        concept_method = (c.metadata or {}).get("detrend", global_method)
+        if concept_method == global_method:
+            cols.append(cid)
+    return cols
 
 
 def _build_adjacency_result(fcm: FCMGraph) -> Dict[str, Any]:
@@ -48,11 +78,45 @@ def _compute_graph_metrics(fcm: FCMGraph) -> Dict[str, Any]:
     }
 
 
+def _config_snapshot(dml_config: DMLConfig, bootstrap_config: Optional[BootstrapConfig]) -> Dict[str, Any]:
+    """Build a plain-dict snapshot of the configs used for this run."""
+    lag = dml_config.lag_config
+    snap: Dict[str, Any] = {
+        "max_lag": lag.max_lag,
+        "include_self_lags": lag.include_self_lags,
+        "drop_initial_na": lag.drop_initial_na,
+        "outcome_model": {"model_type": dml_config.outcome_model.model_type,
+                          "params": dml_config.outcome_model.params},
+        "treatment_model": {"model_type": dml_config.treatment_model.model_type,
+                            "params": dml_config.treatment_model.params},
+        "n_folds": dml_config.n_folds,
+        "min_train_size": dml_config.min_train_size,
+        "random_state": dml_config.random_state,
+        "alpha_scale": dml_config.alpha_scale,
+        "standardize": dml_config.standardize,
+        "detrend": dml_config.detrend,
+        "treatment_lag": dml_config.treatment_lag,
+        "controls_selection": dml_config.controls_selection,
+        "use_econml": dml_config.use_econml,
+        "econml_estimator": dml_config.econml_estimator,
+        "bootstrap": None,
+    }
+    if bootstrap_config is not None:
+        snap["bootstrap"] = {
+            "n_bootstrap": bootstrap_config.n_bootstrap,
+            "block_size": bootstrap_config.block_size,
+            "random_state": bootstrap_config.random_state,
+            "n_jobs": bootstrap_config.n_jobs,
+        }
+    return snap
+
+
 def run_estimation(
     input_path: Path,
     output_path: Path,
     dml_config: DMLConfig,
     bootstrap_config: Optional[BootstrapConfig] = None,
+    cli_args: Optional[list] = None,
 ) -> None:
     """
     Load fcm_project.json, estimate all edges (DML + optional bootstrap),
@@ -60,10 +124,23 @@ def run_estimation(
 
     This is the high-level entry point to go from raw project JSON to an
     enriched JSON with estimates and computation metadata.
+
+    The full config used for this run is stored in ``meta.estimation_config``
+    so outputs are self-documenting.  When called from the CLI, ``cli_args``
+    captures the raw ``sys.argv[1:]`` list for exact reproducibility.
     """
 
     fcm, ts, settings, meta = load_project(Path(input_path))
     meta_out = deepcopy(meta)
+
+    # Detrend first (on raw scale), then standardize.
+    if dml_config.detrend != "none":
+        # Check for per-concept overrides in concept metadata
+        detrend_cols = _get_detrend_columns(fcm, dml_config.detrend, ts)
+        if detrend_cols is not None:
+            ts = detrend_timeseries(ts, method=dml_config.detrend, columns=detrend_cols)
+        else:
+            ts = detrend_timeseries(ts, method=dml_config.detrend)
 
     # Standardize once; both DML and bootstrap use the same transformed data.
     if dml_config.standardize:
@@ -77,6 +154,9 @@ def run_estimation(
         meta_out["weights_method"] = "dml"
 
     meta_out["weights_computed_at"] = datetime.now(timezone.utc).isoformat()
+    meta_out["estimation_config"] = _config_snapshot(dml_config, bootstrap_config)
+    if cli_args is not None:
+        meta_out["estimation_config"]["cli_args"] = list(cli_args)
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
@@ -151,6 +231,13 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         help="Lag for treatment variable: 0 (default) = contemporaneous T_t -> Y_t, 1 = lagged T_{t-1} -> Y_t, etc.",
     )
     parser.add_argument("--no-standardize", action="store_true", help="Skip z-score standardization of concept time series (default: standardize)")
+    parser.add_argument(
+        "--detrend",
+        type=str,
+        default="none",
+        choices=["none", "linear", "first_diff"],
+        help="Detrending method: 'none' (default), 'linear' (subtract OLS trend), 'first_diff' (first-difference series)",
+    )
     parser.add_argument("--bootstrap", action="store_true", help="Enable block bootstrap for uncertainty")
     parser.add_argument("--n-bootstrap", type=int, default=200, help="Number of bootstrap replications")
     parser.add_argument("--block-size", type=int, default=5, help="Block size for bootstrap")
@@ -163,6 +250,8 @@ def main():
     """
     CLI entrypoint: parse args, construct configs, and run estimation.
     """
+    import sys as _sys
+    _raw_argv = _sys.argv[1:]
 
     args = _build_arg_parser().parse_args()
 
@@ -182,6 +271,7 @@ def main():
         controls_selection=args.controls_selection,
         treatment_lag=args.treatment_lag,
         standardize=not args.no_standardize,
+        detrend=args.detrend,
     )
 
     bs_config: Optional[BootstrapConfig] = None
@@ -198,6 +288,7 @@ def main():
         output_path=args.output,
         dml_config=dml_config,
         bootstrap_config=bs_config,
+        cli_args=_raw_argv,
     )
 
 

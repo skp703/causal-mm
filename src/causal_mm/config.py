@@ -41,6 +41,7 @@ class DMLConfig:
     controls_selection: str = "all"  # "all" | "connected"
     treatment_lag: int = 0  # 0 = contemporaneous (T_t -> Y_t), 1 = lagged (T_{t-1} -> Y_t), etc.
     standardize: bool = True  # z-score concept time series before estimation
+    detrend: str = "none"  # "none" | "linear" | "first_diff" — remove deterministic trends before estimation
 
 
 @dataclass

@@ -5,7 +5,7 @@ Exports core configs, data structures, IO, DML, bootstrap, metrics, and pipeline
 """
 
 from .config import LagConfig, MLModelConfig, DMLConfig, BootstrapConfig
-from .data import TimeSeriesData, build_lagged_design, align_fcm_and_timeseries, standardize_timeseries
+from .data import TimeSeriesData, build_lagged_design, align_fcm_and_timeseries, standardize_timeseries, detrend_timeseries
 from .fcm import Concept, Edge, EdgeEstimate, FCMGraph
 from .dml import estimate_edge_dml, estimate_all_edges_dml
 from .bootstrap import bootstrap_edge, bootstrap_all_edges
@@ -36,6 +36,7 @@ __all__ = [
     "build_lagged_design",
     "align_fcm_and_timeseries",
     "standardize_timeseries",
+    "detrend_timeseries",
     "Concept",
     "Edge",
     "EdgeEstimate",

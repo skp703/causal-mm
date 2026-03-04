@@ -1,6 +1,6 @@
 [project]
 name = "causal-mm"
-version = "0.1.0"
+version = "0.2.0"
 description = "Time-series Double Machine Learning for Fuzzy Cognitive Maps"
 readme = "README.md"
 requires-python = ">=3.9,<3.13"
