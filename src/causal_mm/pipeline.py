@@ -19,34 +19,36 @@ from .metrics import graph_complexity_metrics, concept_centrality_metrics
 logger = logging.getLogger(__name__)
 
 
-def _get_detrend_columns(
+def _get_detrend_plan(
     fcm: FCMGraph, global_method: str, ts: "TimeSeriesData"
-) -> "list[str] | None":
+) -> "dict[str, list[str]] | None":
     """
-    Determine which columns to detrend based on per-concept metadata.
+    Build a detrend plan mapping each detrend method to its columns.
 
     Each concept can specify ``"detrend": "linear"`` / ``"first_diff"`` /
-    ``"none"`` in its ``metadata`` dict.  If *any* concept has a per-concept
-    override, we build an explicit column list (only those whose effective
-    method matches ``global_method``).  If *no* concept has an override, we
-    return None (meaning detrend all columns).
+    ``"none"`` in its ``metadata`` dict.  If *no* concept has an override,
+    returns None (meaning apply ``global_method`` to all columns).
+
+    Otherwise returns e.g. ``{"linear": ["X", "Z"], "first_diff": ["Y"]}``.
+    Concepts with ``"none"`` are excluded (no detrending).
     """
 
     has_overrides = any(
         c.metadata and "detrend" in c.metadata for c in fcm.concepts
     )
     if not has_overrides:
-        return None  # detrend everything
+        return None  # detrend everything with global_method
 
-    cols = []
+    plan: dict[str, list[str]] = {}
     for c in fcm.concepts:
         cid = str(c.id)
         if cid not in ts.data.columns:
             continue
         concept_method = (c.metadata or {}).get("detrend", global_method)
-        if concept_method == global_method:
-            cols.append(cid)
-    return cols
+        if concept_method == "none":
+            continue
+        plan.setdefault(concept_method, []).append(cid)
+    return plan
 
 
 def _build_adjacency_result(fcm: FCMGraph) -> Dict[str, Any]:
@@ -107,6 +109,7 @@ def _config_snapshot(dml_config: DMLConfig, bootstrap_config: Optional[Bootstrap
             "block_size": bootstrap_config.block_size,
             "random_state": bootstrap_config.random_state,
             "n_jobs": bootstrap_config.n_jobs,
+            "ci_alpha": bootstrap_config.ci_alpha,
         }
     return snap
 
@@ -136,9 +139,13 @@ def run_estimation(
     # Detrend first (on raw scale), then standardize.
     if dml_config.detrend != "none":
         # Check for per-concept overrides in concept metadata
-        detrend_cols = _get_detrend_columns(fcm, dml_config.detrend, ts)
-        if detrend_cols is not None:
-            ts = detrend_timeseries(ts, method=dml_config.detrend, columns=detrend_cols)
+        detrend_plan = _get_detrend_plan(fcm, dml_config.detrend, ts)
+        if detrend_plan is not None:
+            # Apply non-row-dropping methods first (e.g. linear), then
+            # first_diff last, because first_diff drops the first row
+            # globally and would shorten the series for other methods.
+            for method in sorted(detrend_plan, key=lambda m: m == "first_diff"):
+                ts = detrend_timeseries(ts, method=method, columns=detrend_plan[method])
         else:
             ts = detrend_timeseries(ts, method=dml_config.detrend)
 
@@ -241,6 +248,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--bootstrap", action="store_true", help="Enable block bootstrap for uncertainty")
     parser.add_argument("--n-bootstrap", type=int, default=200, help="Number of bootstrap replications")
     parser.add_argument("--block-size", type=int, default=5, help="Block size for bootstrap")
+    parser.add_argument("--ci-alpha", type=float, default=0.05, help="Significance level for bootstrap CIs (default: 0.05 for 95% CI)")
     parser.add_argument("--bs-n-jobs", type=int, default=1, help="Parallel jobs for bootstrap (joblib style)")
     parser.add_argument("--random-state", type=int, default=123, help="Random seed for folds/bootstrap")
     return parser
@@ -281,6 +289,7 @@ def main():
             block_size=args.block_size,
             random_state=args.random_state,
             n_jobs=args.bs_n_jobs,
+            ci_alpha=args.ci_alpha,
         )
 
     run_estimation(

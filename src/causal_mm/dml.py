@@ -189,10 +189,10 @@ def _prepare_matrices(
     T = trimmed_ts.data[source].astype(float)
     
     # Apply treatment lag if specified (e.g., T_{t-1} -> Y_t)
-    # Use negative shift: shift(-1) moves T backward in time,
-    # so T[t-1] aligns with Y[t]
+    # shift(k) moves each value forward by k positions, so at row t
+    # we see the value from row t-k, i.e. T_{t-k}.
     if dml_config.treatment_lag > 0:
-        T = T.shift(-dml_config.treatment_lag)
+        T = T.shift(dml_config.treatment_lag)
 
     W = X_lagged.copy()
 

@@ -12,6 +12,10 @@ class LagConfig:
     include_self_lags: bool = True
     drop_initial_na: bool = True
 
+    def __post_init__(self):
+        if self.max_lag < 1:
+            raise ValueError(f"max_lag must be >= 1, got {self.max_lag}")
+
 
 @dataclass
 class MLModelConfig:
@@ -43,6 +47,14 @@ class DMLConfig:
     standardize: bool = True  # z-score concept time series before estimation
     detrend: str = "none"  # "none" | "linear" | "first_diff" — remove deterministic trends before estimation
 
+    def __post_init__(self):
+        if self.n_folds < 1:
+            raise ValueError(f"n_folds must be >= 1, got {self.n_folds}")
+        if self.min_train_size < 1:
+            raise ValueError(f"min_train_size must be >= 1, got {self.min_train_size}")
+        if self.treatment_lag < 0:
+            raise ValueError(f"treatment_lag must be >= 0, got {self.treatment_lag}")
+
 
 @dataclass
 class BootstrapConfig:
@@ -54,3 +66,12 @@ class BootstrapConfig:
     block_size: int = 5
     random_state: Optional[int] = 123
     n_jobs: int = 1
+    ci_alpha: float = 0.05
+
+    def __post_init__(self):
+        if self.n_bootstrap < 1:
+            raise ValueError(f"n_bootstrap must be >= 1, got {self.n_bootstrap}")
+        if self.block_size < 1:
+            raise ValueError(f"block_size must be >= 1, got {self.block_size}")
+        if not (0.0 < self.ci_alpha < 1.0):
+            raise ValueError(f"ci_alpha must be in (0, 1), got {self.ci_alpha}")

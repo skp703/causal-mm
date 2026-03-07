@@ -14,7 +14,12 @@ from .fcm import FCMGraph
 
 def proportion_edges_significant(fcm: FCMGraph, alpha: float = 0.05) -> float:
     """
-    Fraction of edges whose CI excludes zero.
+    Fraction of edges whose CI excludes zero at the requested alpha.
+
+    If an estimate carries ``ci_alpha`` metadata and it does not match the
+    requested ``alpha``, that edge is skipped.
+
+    Returns NaN when no compatible confidence intervals are available.
     """
 
     count = 0
@@ -22,10 +27,12 @@ def proportion_edges_significant(fcm: FCMGraph, alpha: float = 0.05) -> float:
     for est in fcm.estimates.values():
         if est.ci_low is None or est.ci_high is None:
             continue
+        if est.ci_alpha is not None and not np.isclose(est.ci_alpha, alpha):
+            continue
         total += 1
         if est.ci_low > 0 or est.ci_high < 0:
             count += 1
-    return count / total if total else 0.0
+    return count / total if total else float("nan")
 
 
 def average_sign_stability(fcm: FCMGraph) -> float:
@@ -403,7 +410,10 @@ def graph_complexity_metrics_from_adjacency(
     B = (A != 0).astype(int)
 
     C = int(B.sum())
-    density = float(C) / (n * (n - 1)) if n > 1 else 0.0
+    if ignore_self_loops:
+        density = float(C) / (n * (n - 1)) if n > 1 else 0.0
+    else:
+        density = float(C) / (n * n) if n > 0 else 0.0
 
     out_degree = B.sum(axis=1)
     in_degree  = B.sum(axis=0)

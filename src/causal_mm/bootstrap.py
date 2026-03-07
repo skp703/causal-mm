@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -13,6 +13,8 @@ from .fcm import FCMGraph, EdgeEstimate
 from .dml import estimate_edge_dml, _prepare_matrices, estimate_tau_from_matrices
 
 logger = logging.getLogger(__name__)
+
+BootstrapSummary = Dict[str, Union[Optional[float], str]]
 
 
 def generate_block_indices(T: int, block_size: int, random_state: Optional[int] = None) -> np.ndarray:
@@ -154,17 +156,40 @@ def _prepare_bootstrap_matrices(
 
     Y = pd.Series(trimmed_data[target].astype(float).values, index=trimmed_index)
     T = pd.Series(trimmed_data[source].astype(float).values, index=trimmed_index)
+
+    # Apply treatment lag if specified (e.g., T_{t-1} -> Y_t)
+    # shift(k) moves each value forward by k positions, so at row t
+    # we see the value from row t-k, i.e. T_{t-k}.
+    if dml_config.treatment_lag > 0:
+        T = T.shift(dml_config.treatment_lag)
+
     W = X_lagged.copy()
+
+    # Filter controls based on selection strategy (must match _prepare_matrices)
+    if dml_config.controls_selection == "connected":
+        parents = {e.source for e in fcm.edges if e.target == target}
+        parents.add(source)
+        parents.add(target)
+        keep_cols = []
+        for col in W.columns:
+            for p in parents:
+                if col.startswith(f"{p}_lag"):
+                    keep_cols.append(col)
+                    break
+        W = W[keep_cols]
+
     if not lag_cfg.include_self_lags:
         drop_cols = [c for c in W.columns if c.startswith(f"{target}_lag")]
         W = W.drop(columns=drop_cols)
 
-    # Ensure no NaNs propagate into model fitting.
+    # Remove rows with NaN from treatment lag or control columns.
+    valid_mask = ~T.isna()
     if W.isna().any(axis=None):
-        valid_mask = ~W.isna().any(axis=1)
-        W = W.loc[valid_mask]
+        valid_mask = valid_mask & ~W.isna().any(axis=1)
+    if not valid_mask.all():
         Y = Y.loc[valid_mask]
         T = T.loc[valid_mask]
+        W = W.loc[valid_mask]
 
     return Y.reset_index(drop=True), T.reset_index(drop=True), W.reset_index(drop=True)
 
@@ -176,7 +201,7 @@ def bootstrap_edge(
     target: str,
     dml_config: DMLConfig,
     bs_config: BootstrapConfig,
-) -> Dict[str, Optional[float]]:
+) -> BootstrapSummary:
     """
     Run block bootstrap for a single edge.
 
@@ -190,7 +215,8 @@ def bootstrap_edge(
 
     for b in range(bs_config.n_bootstrap):
         try:
-            idx = generate_block_indices(len(ts.data), bs_config.block_size, random_state=(bs_config.random_state or 0) + b)
+            seed = (bs_config.random_state + b) if bs_config.random_state is not None else None
+            idx = generate_block_indices(len(ts.data), bs_config.block_size, random_state=seed)
             Y_resampled, T_resampled, W_resampled = _prepare_bootstrap_matrices(
                 ts, fcm, source, target, dml_config, idx
             )
@@ -204,12 +230,15 @@ def bootstrap_edge(
 
 
     if not tau_samples:
-        return {"tau_se": None, "ci_low": None, "ci_high": None, "sign_stability": None}
+        logger.warning("All %d bootstrap replications failed for edge %s->%s", bs_config.n_bootstrap, source, target)
+        return {"tau_se": None, "ci_low": None, "ci_high": None, "sign_stability": None, "error": "all bootstrap replications failed"}
 
     arr = np.asarray(tau_samples)
     tau_se = float(np.std(arr, ddof=1)) if len(arr) > 1 else 0.0
-    ci_low = float(np.percentile(arr, 2.5))
-    ci_high = float(np.percentile(arr, 97.5))
+    lower_pct = 100.0 * (bs_config.ci_alpha / 2.0)
+    upper_pct = 100.0 * (1.0 - bs_config.ci_alpha / 2.0)
+    ci_low = float(np.percentile(arr, lower_pct))
+    ci_high = float(np.percentile(arr, upper_pct))
 
     base_est = fcm.estimates.get((source, target))
     if base_est and base_est.tau_raw is not None:
@@ -232,7 +261,7 @@ def _bootstrap_edge_safe(
     edge: Tuple[str, str],
     dml_config: DMLConfig,
     bs_config: BootstrapConfig,
-) -> Tuple[Tuple[str, str], Dict[str, Optional[float]]]:
+) -> Tuple[Tuple[str, str], BootstrapSummary]:
     """
     Wrapper to catch exceptions so parallel jobs don't crash the whole run.
     """
@@ -271,6 +300,7 @@ def bootstrap_all_edges(
         est.tau_se = summary.get("tau_se")
         est.ci_low = summary.get("ci_low")
         est.ci_high = summary.get("ci_high")
+        est.ci_alpha = bs_config.ci_alpha if est.ci_low is not None and est.ci_high is not None else None
         est.sign_stability = summary.get("sign_stability")
         est.method = "bootstrap-dml"
         if summary.get("error"):

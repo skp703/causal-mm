@@ -1,6 +1,6 @@
 [project]
 name = "causal-mm"
-version = "0.2.0"
+version = "0.2.1"
 description = "Time-series Double Machine Learning for Fuzzy Cognitive Maps"
 readme = "README.md"
 requires-python = ">=3.9,<3.13"
@@ -46,6 +46,14 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 exclude = ["tests*"]
+
+[tool.pytest.ini_options]
+testpaths = [
+    "tests",
+]
+markers = [
+    "slow: marks tests as slow (run with all tests, use -m 'not slow' to skip)",
+]
 
 [project.scripts]
 causal-mm-run = "causal_mm.pipeline:main"

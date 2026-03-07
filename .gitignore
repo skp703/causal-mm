@@ -69,7 +69,7 @@ __pypackages__/
 
 # Environments
 .env
-.venv
+.venv*
 env/
 venv/
 ENV/
@@ -105,3 +105,6 @@ dmypy.pid
 cython_debug/
 
 /data/models/*
+
+temp_test_delete
+temp/*

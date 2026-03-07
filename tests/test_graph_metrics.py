@@ -1,6 +1,12 @@
 
 from causal_mm.fcm import FCMGraph, Concept, EdgeEstimate
-from causal_mm.metrics import graph_complexity_metrics, concept_centrality_metrics
+from causal_mm.metrics import (
+    graph_complexity_metrics,
+    concept_centrality_metrics,
+    get_adjacency_matrix,
+    graph_complexity_metrics_from_adjacency,
+    proportion_edges_significant,
+)
 import pandas as pd
 import numpy as np
 
@@ -90,6 +96,43 @@ def test_graph_metrics():
     print("Hierarchical Metrics:", metrics_h)
     # Just check it runs and gives non-zero
     assert metrics_h["Hierarchy"] > 0
+
+def test_density_consistency_with_adjacency_variant():
+    c1 = Concept(id="1")
+    c2 = Concept(id="2")
+    fcm = FCMGraph(concepts=[c1, c2], edges=[])
+    fcm.estimates[("1", "1")] = EdgeEstimate(source="1", target="1", scaled_weight=1.0)
+    fcm.estimates[("2", "2")] = EdgeEstimate(source="2", target="2", scaled_weight=1.0)
+
+    metrics_graph = graph_complexity_metrics(fcm, ignore_self_loops=False)
+    _, A = get_adjacency_matrix(fcm, ignore_self_loops=False)
+    metrics_adj = graph_complexity_metrics_from_adjacency(A, ignore_self_loops=False)
+
+    assert metrics_graph["density"] == metrics_adj["density"]
+
+
+def test_proportion_edges_significant_respects_ci_alpha():
+    c1 = Concept(id="1")
+    c2 = Concept(id="2")
+    c3 = Concept(id="3")
+    fcm = FCMGraph(concepts=[c1, c2, c3], edges=[])
+    fcm.estimates[("1", "2")] = EdgeEstimate(source="1", target="2", ci_low=0.1, ci_high=0.2, ci_alpha=0.05)
+    fcm.estimates[("2", "3")] = EdgeEstimate(source="2", target="3", ci_low=0.1, ci_high=0.2, ci_alpha=0.10)
+
+    # At alpha=0.05 only one edge should be considered and it is significant.
+    assert proportion_edges_significant(fcm, alpha=0.05) == 1.0
+    # At alpha=0.10, the other edge is considered and it is also significant.
+    assert proportion_edges_significant(fcm, alpha=0.10) == 1.0
+
+
+def test_proportion_edges_significant_nan_when_no_matching_alpha():
+    c1 = Concept(id="1")
+    c2 = Concept(id="2")
+    fcm = FCMGraph(concepts=[c1, c2], edges=[])
+    fcm.estimates[("1", "2")] = EdgeEstimate(source="1", target="2", ci_low=0.1, ci_high=0.2, ci_alpha=0.05)
+
+    assert np.isnan(proportion_edges_significant(fcm, alpha=0.10))
+
 
 if __name__ == "__main__":
     test_graph_metrics()

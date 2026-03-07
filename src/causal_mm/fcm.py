@@ -29,6 +29,7 @@ class EdgeEstimate:
     tau_se: Optional[float] = None
     ci_low: Optional[float] = None
     ci_high: Optional[float] = None
+    ci_alpha: Optional[float] = None
     sign_stability: Optional[float] = None
     scaled_weight: Optional[float] = None
     n_obs: Optional[int] = None
