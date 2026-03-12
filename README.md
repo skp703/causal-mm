@@ -170,8 +170,37 @@ Reads each file's `results.adjacency_matrix`, aligns by concept ID, and reports 
 - Block bootstrap is recommended whenever you care about uncertainty in time-dependent data.
 - Cycles are fine: time lags break simultaneity (A_t depends on B_{t-1}, B_t on A_{t-1}).
 
+## Interactive GUI
+
+The `gui/` directory contains a Streamlit-based visualizer for inspecting, analyzing, and creating `fcm_project.json` files in the browser.
+
+### Install GUI dependencies
+```bash
+pip install causal-mm[gui]
+# or
+pip install -r gui/requirements.txt
+```
+
+### Launch
+```bash
+streamlit run gui/app.py
+```
+
+Opens at **http://localhost:8501** with pages for:
+
+| Page | What it shows |
+|------|---------------|
+| 🕸️ **Network** | Interactive directed graph (colored nodes, weighted edges, adjacency heatmap) |
+| ⚖️ **Weights** | Edge-weight table, forest plot with 95% CI, sign-stability bars |
+| 📈 **Time Series** | Multi-line Plotly charts, z-score toggle, correlation matrix |
+| 📊 **Metrics** | Graph complexity KPIs, concept centrality, node-role distribution |
+| ✏️ **Editor** | Create/edit concepts, edges, import CSV time series, export JSON |
+
+See [`gui/README.md`](gui/README.md) for full documentation.
+
 ## Repository layout
 - `src/causal_mm/`: core package (config, data, fcm, dml, bootstrap, metrics, io, pipeline, simulation).
+- `gui/`: Streamlit interactive visualizer (network graph, weights, time series, metrics, editor).
 - `scripts/`: utilities (e.g., `compare_mental_models.py`).
 - `tests/`: unit tests.
 - Packaging: `pyproject.toml`; console entry point `causal-mm-run`.

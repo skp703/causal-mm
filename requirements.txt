@@ -8,3 +8,9 @@ joblib
 statsmodels
 python-dotenv
 pytest>=7.0
+
+# GUI dependencies (optional — install for interactive visualizer)
+streamlit>=1.30
+plotly>=5.18
+networkx>=3.0
+streamlit-agraph>=0.0.45

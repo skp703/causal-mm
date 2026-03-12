@@ -14,3 +14,8 @@ dependencies:
       - econml>=0.15
       - lightgbm>=4.0
       - python-dotenv
+      # GUI (interactive visualizer)
+      - streamlit>=1.30
+      - plotly>=5.18
+      - networkx>=3.0
+      - streamlit-agraph>=0.0.45

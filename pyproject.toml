@@ -1,9 +1,9 @@
 [project]
 name = "causal-mm"
-version = "0.2.1"
+version = "0.3.0"
 description = "Time-series Double Machine Learning for Fuzzy Cognitive Maps"
 readme = "README.md"
-requires-python = ">=3.9,<3.13"
+requires-python = ">=3.9,<3.14"
 license = {text = "MIT"}
 authors = [
   {name = "Saurav Kumar"},
@@ -30,10 +30,11 @@ dependencies = [
 
 [project.optional-dependencies]
 econml = ["econml>=0.15", "lightgbm>=4.0"]
+gui = ["streamlit>=1.30", "plotly>=5.18", "networkx>=3.0", "streamlit-agraph>=0.0.45"]
 dev = ["pytest>=7.0", "build", "twine"]
 
 [project.urls]
-Homepage = "https://waterdmd.info/causal-mm"
+Homepage = "https://github.com/skp703/causal-mm"
 Repository = "https://github.com/skp703/causal-mm"
 
 [build-system]
