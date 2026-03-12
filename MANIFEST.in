@@ -4,6 +4,7 @@ include requirements.txt
 include environment.yml
 
 recursive-include src/causal_mm *.py
+recursive-include src/causal_mm/gui *
 recursive-include examples *.py *.json
 
 prune data

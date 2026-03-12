@@ -1,6 +1,6 @@
 [project]
 name = "causal-mm"
-version = "0.3.0"
+version = "0.3.1"
 description = "Time-series Double Machine Learning for Fuzzy Cognitive Maps"
 readme = "README.md"
 requires-python = ">=3.9,<3.14"
@@ -58,3 +58,4 @@ markers = [
 
 [project.scripts]
 causal-mm-run = "causal_mm.pipeline:main"
+causal-mm-gui = "causal_mm.gui.launch:main"

@@ -48,6 +48,20 @@ cd causal-mm
 pip install -e .
 ```
 
+## GUI
+
+Launch the interactive visualizer (part of the deployed package):
+
+```bash
+causal-mm-gui
+```
+
+Or from the source repository:
+
+```bash
+streamlit run gui/app.py
+```
+
 ### Using conda
 ```bash
 conda env create -f environment.yml
